@@ -15,3 +15,5 @@
 *.xlsx
 *.sas7bdat
 *.csv
+.Rproj.user
+*.docx
