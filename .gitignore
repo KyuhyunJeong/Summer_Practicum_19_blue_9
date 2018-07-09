@@ -4,3 +4,14 @@
 *.ptx
 *.cubin
 *.fatbin
+
+
+# Rstudio files
+.Rproj.user/
+.Rproj
+*.Rproj
+
+# Data files
+*.xlsx
+*.sas7bdat
+*.csv
