@@ -10,6 +10,8 @@
 .Rproj.user/
 .Rproj
 *.Rproj
+*.RData
+*.Rhistory
 
 # Data files
 *.xlsx
