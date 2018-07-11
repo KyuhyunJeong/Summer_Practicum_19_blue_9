@@ -52,7 +52,7 @@ remove(MA_marriage, NC_marriage, OR_marriage, NAs, Marriage)
 
 
 # for the school data
-#prepare for the marital data
+#prepare for the school data
 MA_school <-read_sas('Original_Data/Data/MA/ACS_16_5YR_S1401_with_ann2.sas7bdat')
 NC_school <-read_sas('Original_Data/Data/NC/ACS_16_5YR_S1401_with_ann2.sas7bdat')
 OR_school <-read_sas('Original_Data/Data/OR/ACS_16_5YR_S1401_with_ann2.sas7bdat')
@@ -116,4 +116,52 @@ write.csv(School, 'Original_Data/csv/School.csv')
 
 remove(MA_school, NC_school, OR_school, NAs, NAs_pri, NAs_pub, NAs_no_match, School)
 
-# for the 
+# for the employment data
+#prepare for the employment data
+MA_employment <-read_sas('Original_Data/Data/MA/ACS_16_5YR_S2301_with_ann2.sas7bdat')
+NC_employment <-read_sas('Original_Data/Data/NC/ACS_16_5YR_S2301_with_ann2.sas7bdat')
+OR_employment <-read_sas('Original_Data/Data/OR/ACS_16_5YR_S2301_with_ann2.sas7bdat')
+
+Employment <- (MA_employment %>% mutate(state = 'MA')) %>%
+  rbind( NC_employment %>% mutate(state = 'NC') ) %>%
+  rbind( OR_employment %>% mutate(state = 'OR') ) %>%
+  as_data_frame() %>%
+  select(Zip = Zip, 
+         Total_over_16 = HC01_EST_VC01,
+         LF_over_16 = HC02_EST_VC01,
+         ER_over_16 = HC03_EST_VC01,
+         UR_over_16 = HC04_EST_VC01,
+         
+         Total_2064 = HC01_EST_VC26,
+         LF_2064 = HC02_EST_VC26,
+         ER_2064 = HC03_EST_VC26,
+         UR_2064 = HC04_EST_VC26,
+         
+         Total_lt_pl = HC01_EST_VC36,
+         LF_lt_pl = HC02_EST_VC36,
+         ER_lt_pl = HC03_EST_VC36,
+         UR_lt_pl = HC04_EST_VC36,
+         
+         Total_ge_pl = HC01_EST_VC37,
+         LF_ge_pl = HC02_EST_VC37,
+         ER_ge_pl = HC03_EST_VC37,
+         UR_ge_pl = HC04_EST_VC37
+  )
+
+#convert from character values to numeric values
+Employment[2:17] <- sapply(Employment[2:17], as.character)
+Employment[2:17] <- sapply(Employment[2:17], as.numeric) # Notice that there are 15 warnings
+
+#find NA values in Employment
+NAs_over_16 <- Employment[which(is.na(Employment$Total_over_16)|is.na(Employment$LF_over_16)|is.na(Employment$ER_over_16)|is.na(Employment$UR_over_16)),]
+NAs_2064 <- Employment[which(is.na(Employment$Total_2064)|is.na(Employment$LF_2064)|is.na(Employment$ER_2064)|is.na(Employment$UR_2064)),]
+NAs_lt_pl <- Employment[which(is.na(Employment$Total_lt_pl)|is.na(Employment$LF_lt_pl)|is.na(Employment$ER_lt_pl)|is.na(Employment$UR_lt_pl)),]
+NAs_ge_pl <- Employment[which(is.na(Employment$Total_ge_pl)|is.na(Employment$LF_ge_pl)|is.na(Employment$ER_ge_pl)|is.na(Employment$UR_ge_pl)),]
+# the warnings come from the zip code with 0 ppl with that criteria
+
+#wrie the final dataset in sas and csv files
+write_sas(Employment, 'Original_Data/Data/Employment.sas7bdat')
+write.csv(Employment, 'Original_Data/csv/Employment.csv')
+
+#clean any temporary datasets
+remove(MA_employment, NC_employment, OR_employment, NAs_over_16, NAs_2064, NAs_lt_pl, NAs_ge_pl, Employment)
