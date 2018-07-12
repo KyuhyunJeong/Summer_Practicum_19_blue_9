@@ -165,3 +165,29 @@ write.csv(Employment, 'Original_Data/csv/Employment.csv')
 
 #clean any temporary datasets
 remove(MA_employment, NC_employment, OR_employment, NAs_over_16, NAs_2064, NAs_lt_pl, NAs_ge_pl, Employment)
+
+
+#Merging all data
+#reading the data
+Employment <- read.csv("Original_Data/csv/Employment.csv")
+Marriage <- read.csv("Original_Data/csv/Marriage.csv")
+School <- read.csv("Original_Data/csv/School.csv")
+Income <- read.csv("Original_Data/csv/Income.csv")
+Raceagesex <- read.csv("Original_Data/csv/Raceagesex.csv")
+Education <- read.csv("Original_Data/csv/Education.csv")
+Households <- read.csv("Original_Data/csv/Households.csv")
+Proverty  <- read.csv("Original_Data/csv/proverty.csv")
+
+Merged_cleaned_data <- Employment %>%
+  left_join(Marriage, by="Zip") %>%
+  left_join(School, by="Zip") %>%
+  left_join(Income, by="Zip") %>%
+  left_join(Raceagesex, by="Zip") %>%
+  left_join(Education, by="Zip") %>%
+  left_join(Proverty, by="Zip") %>%
+  left_join(Households, by="Zip")
+
+write.csv(Merged_cleaned_data, 'Original_Data/csv/Merged_cleaned_data.csv')
+write_sas(Merged_cleaned_data, 'Original_Data/csv/Merged_cleaned_data.sas7bdat')
+
+remove(Employment, Marriage, School, Income, Raceagesex, Education, Households)
