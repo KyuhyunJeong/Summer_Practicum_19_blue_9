@@ -19,3 +19,5 @@
 *.csv
 .Rproj.user
 *.docx
+.Rhistory
+.RData
