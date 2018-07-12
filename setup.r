@@ -190,4 +190,5 @@ Merged_cleaned_data <- Employment %>%
 write.csv(Merged_cleaned_data, 'Original_Data/csv/Merged_cleaned_data.csv')
 write_sas(Merged_cleaned_data, 'Original_Data/csv/Merged_cleaned_data.sas7bdat')
 
-remove(Employment, Marriage, School, Income, Raceagesex, Education, Households)
+remove(Employment, Marriage, School, Income, Raceagesex, Education, Households, Proverty, Merged_cleaned_data)
+
