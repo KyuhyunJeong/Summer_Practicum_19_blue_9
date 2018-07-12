@@ -5,8 +5,6 @@ libname MA "&Path\MA";
 libname NC "&Path\NC";
 libname OR "&Path\OR";
 
-
-
 data MA_marriage(keep = Zip
   Total_over_15 Married_over_15 Widowed_over_15 Divorced_over_15 Separated_over_15 Never_over_15 total
   Total_over_15_M Married_over_15_M Widowed_over_15_M Divorced_over_15_M Separated_over_15_M Never_over_15_M total_M
@@ -83,7 +81,9 @@ data OR_marriage(keep = Zip
 	Total_over_15_M = input(HC01_EST_VC03, 7.);
 	Married_over_15_M = input(HC02_EST_VC03, 7.1);
 	Widowed_over_15_M = input(HC03_EST_VC03, 7.1);
-	Divorced_over_15_M = input(HC04_EST_VC03, 7.1);
+
+
+Divorced_over_15_M = input(HC04_EST_VC03, 7.1);
 	Separated_over_15_M = input(HC05_EST_VC03, 7.1);
 	Never_over_15_M = input(HC06_EST_VC03, 7.1);
 	total_M = Married_over_15_M + Widowed_over_15_M + Divorced_over_15_M + Separated_over_15_M + Never_over_15_M;
