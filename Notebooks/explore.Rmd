@@ -1,0 +1,335 @@
+---
+title: "Exploration"
+author: "Tommy Lang"
+date: "7/3/2018"
+output:
+  html_notebook:
+    code_folding: hide
+    df_print: paged
+    fig_height: 4
+    fig_width: 7
+    highlight: tango
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+---
+
+# Packages, Data and Custom Functions
+
+Custom Functions:
+This code chunk contains custom fucntions that I use to help automate or make
+tasks easier.
+```{r message=FALSE}
+LoadPackages <- function(packages) {
+  # Load or install packages if they aren't already loaded.
+  #
+  # Args:
+  #   packages: a vector of package names
+  #
+  for (package in packages) {
+    if (!require(package, character.only=T, quietly=T)) {
+      if (!package %in% installed.packages()) install.packages(package)
+      library(package, character.only=T)
+    }
+  }
+}
+
+ColNa <- function(df) {
+  # Return a vector of column names that have NA values
+  #
+  # Args:
+  # df: data frame 
+  #
+  # Returns:
+  #  vector of column names that have NAs 
+  df <- tbl_df(df)
+  v <- c()
+  j <- 1
+  for(i in 1:ncol(df)) {
+    x <- df[ ,i]
+    xRmvNA <- x[!is.na(x),]
+    lenx <- nrow(x)
+    lenxRmvNA <- nrow(xRmvNA)
+    if(lenx != lenxRmvNA ) {
+      v[j] <- colnames(df[ ,i])
+      j <- j+1
+    }
+  }
+  return(v)
+}
+
+ReplaceNonNum <- function(x) {
+  str_replace_all(x, "[^.0-9]+", "")
+}
+
+```
+
+Load Packages:
+Packages contain functions that others write that help with doing stuff
+```{r, results=FALSE}
+# I use my custom function LoadPackages to load or install packages
+LoadPackages(c("dplyr", "haven", "stringr", "tidyr", "ggplot2"))
+```
+
+
+Read in data
+```{r results = FALSE}
+data_path <- 'E:/Tommy/Original_Data/Data'
+# The list.files function gets the file names in a specified directory
+# file_names contains the file names of all the data sets
+file_names <- list.files(path = data_path, recursive = TRUE)
+
+# Initialize a vector to hold data frame names
+df_names <- c()
+i <- 1
+
+# This loop goes through the file names and reads it into R
+for(name in file_names) {
+  # create variable name for df
+  df_name <- str_replace_all(name, " |_with_ann2|.sas7bdat|/acs_16_5yr|_records", "")
+  # read in data
+  df <- read_sas(paste0(data_path, "/", name))
+  df <- df %>% mutate_all(funs(as.character(.)))
+  # attach df to variable name
+  assign(df_name, df) 
+  print(paste0("done with: ", df_name, " ", i,"/",length(file_names)))
+  i <- i+1
+  # add the current iteration of the data frame name to the df_names vector
+  df_names <- c(df_names, df_name)
+}
+```
+
+# Data Descritpions
+
+DF names for the data that was read in.  
+- There are 27 sets of demographics data. 9 simliar sets for each state (MA NC OR)  
+- The data sets that start with copy are exact copies of other datasets and can be ignored  
+- The medication_details dataset has some info about the drug (ex. price, manufacture etc.)  
+- rx_nqty: quantity of NEW opiod pills for each month by zip code  
+- rx_nrx: number of NEW opiod prescriptions for each month by zip code  
+- rx_tqty: quantity of TOTAL opiod pills for each month by zip code  
+- rx_trx: number of TOTAL opiod prescriptions for each month by zip code  
+```{r}
+df_names %>% as.data.frame()
+```
+  
+The medication_details dataset has some info about the drug (ex. price, manufacture etc.)
+```{r}
+medication_details
+```
+  
+rx_nqty: quantity of NEW opiod pills for each month by zip code
+```{r}
+rx_nqty
+```
+  
+rx_nrx: number of NEW opiod prescriptions for each month by zip code
+```{r}
+rx_nrx
+```
+  
+rx_tqty: quantity of TOTAL opiod pills for each month by zip code
+```{r}
+rx_tqty
+```
+  
+rx_trx: number of TOTAL opiod prescriptions for each month by zip code
+```{r}
+rx_trx
+```
+  
+MA_s0101: Age and sex demographics data for each zip code in massachusetts  
+Column HC01_EST_VC01: is total population for the respective zip code  
+Column HC02_EST_VC01: total male population for the respective zip code  
+Column HC03_EST_VC01: total femal population for respective zip code  
+- You can view the data dictionary to find out what the other columns mean  
+- The other demographics data sets likely have a very simialr format  
+```{r}
+MA_s0101
+```
+
+  
+Check that the files named with copy really just are duplicates  
+```{r, results=FALSE}
+rx_nqty %>%
+  all_equal(Copyofrx_nqty)
+Copyofrx_nrx %>%
+  all_equal(rx_nrx)
+Copyofrx_tqty %>%
+  all_equal(Copyofrx_tqty)
+Copyofrx_trx %>%
+  all_equal(rx_trx)
+```
+
+# Total Rx By State
+
+Prepare data to see total rx by state for each month
+```{r}
+rx_trx_t <- rx_trx %>% select(ST, starts_with("TRx"))
+
+rx_trx_t <- rx_trx %>%
+  select(ST, starts_with("TRx")) %>%
+  group_by(ST) %>% 
+  summarise_all(funs(sum(.))) %>% 
+  ungroup() %>% 
+  gather(key = "date", value = TRx, -ST) %>%
+  mutate(date = str_replace_all(date, "TRx_", "")) %>% 
+  mutate(date = as.Date(date, '%m%d%Y')) %>%
+  mutate(pop = ifelse(ST == 'MA', 6.86, 
+                      ifelse(ST == "OR", 4.143, 10.27)),
+         rx_pop_ratio = TRx / pop)
+
+# prepare data to see difference between total rx for NC and MA
+MA_rx_pop <- rx_trx_t %>% 
+  filter(ST == "MA") %>% 
+  mutate(MA_rx = rx_pop_ratio) %>% 
+  select(MA_rx)
+
+OR_rx_pop <- rx_trx_t %>% 
+  filter(ST == "OR") %>% 
+  mutate(OR_rx = rx_pop_ratio) %>% 
+  select(OR_rx)
+
+NC_rx_pop <- rx_trx_t %>% 
+  filter(ST == "NC") %>% 
+  mutate(NC_rx = rx_pop_ratio) %>% 
+  select(NC_rx)
+
+diff_df <- bind_cols(rx_trx_t %>% distinct(date), MA_rx_pop, OR_rx_pop, NC_rx_pop) %>%
+  mutate(NC_MA_diff = NC_rx - MA_rx)
+
+```
+
+Line plot of total rx by state for each month
+```{r}
+ggplot(data = rx_trx_t, aes(x = date, y = TRx, color = ST)) +
+  geom_line() +
+  ggtitle("Total Rx")
+
+ggplot(data = rx_trx_t, aes(x = date, y = rx_pop_ratio, color = ST)) +
+  geom_line() +
+  ggtitle("Total Rx per Million Residents")
+
+ggplot(data = diff_df, aes(x = date, y = NC_MA_diff)) +
+  geom_line() +
+  ggtitle("Diff Total Rx per Million Residents Between NC and MA")
+```
+  
+  
+Bar Chart of Total Scripts for each State
+```{r}
+
+ggplot(data = rx_trx_t %>% filter(date == '2017-08-31'), aes(x = ST, y = rx_pop_ratio)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::comma) +
+  ggtitle("Total Scripts Per Mil Residents in August")
+```
+
+
+# MISC (scratch / junk).
+
+
+```{r}
+foo <- rx_trx %>% group_by(city, ST, Zip) %>% summarise(sum(TRx_08312017))
+```
+
+```{r}
+# cast to numeric data type
+MA_s0101_d <- MA_s0101 %>% mutate_all(funs(as.double(.)))
+
+# get col names that have NA values
+na <- ColNa(MA_s0101_d)
+
+# get all col names
+all <- names(MA_s0101)
+
+# this  is column names that don't have any NA values
+setdiff(all,na)
+```
+
+
+Write datesets out as csv files
+```{r}
+for (name in df_names) {
+  write.csv(get(name), paste0('E:/Tommy/scratch/csv/',name,".csv"))
+}
+
+```
+
+
+Replace non numeric values with empty string
+```{r}
+income <- bind_rows(MA_s1901, NC_s1901, OR_s1901)
+
+income_keep <- income %>% 
+  select(Zip, contains("VC01"), contains("VC13"), contains( "VC15"))
+
+
+
+
+income_keep_c <- income_keep %>% mutate_all(funs(ReplaceNonNum))
+income_keep_c[income_keep_c == ""] <- NA
+income_keep_c  <- income_keep_c %>% mutate_all(funs(as.double(.)))
+```
+
+Summarize the data
+```{r}
+income_keep_c %>% summary()
+```
+```{r}
+write.csv(income_keep_c, 'E:/Team_Data/cleaned_data/income.csv')
+```
+
+
+ Check the missing values are truly missing
+```{r}
+col_names <- names(income_keep)
+
+missing_values <- c()
+foo <- c()
+
+for(name in col_names) {
+  mis_zip <- income_keep_c %>% 
+    filter(is.na(get(name))) %>% pull(Zip)
+  
+  org_missing <- income_keep %>% filter(Zip %in% as.character(mis_zip))
+  foo <- org_missing %>% pull(get(name))
+  missing_values <- c(missing_values, foo)
+}
+
+table(missing_values)
+74+105+118+199+46+61+1776+103
+length(missing_values)
+
+col <- 'HC04_EST_VC15'
+
+mis_zip <- income_keep_c %>% filter(is.na(get(col))) %>% pull(Zip)
+
+foo <- income_keep %>% filter(Zip %in% as.character(mis_zip))
+
+table(foo %>% pull(get(col)))
+```
+
+Proverty: Replace non numeric values with empty string
+```{r}
+proverty <- bind_rows(MA_s1701, NC_s1701, OR_s1701)
+
+proverty_keep <- proverty %>% 
+  select(Zip, HC01_EST_VC01, HC03_EST_VC01, HC03_EST_VC30, HC01_EST_VC46,                  HC03_EST_VC54, HC03_EST_VC77)
+
+proverty_keep_c <- proverty_keep %>% mutate_all(funs(ReplaceNonNum))
+proverty_keep_c[proverty_keep_c == ""] <- NA
+
+proverty_keep_c <- proverty_keep_c %>% mutate_all(funs(as.double(.))) 
+```
+
+
+```{r}
+proverty_keep_c  %>% summary()
+```
+
+
+```{r}
+write.csv(proverty_keep_c, 'E:/Team_Data/cleaned_data/proverty.csv')
+```

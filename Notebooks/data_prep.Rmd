@@ -1,0 +1,109 @@
+---
+title: "Exploration"
+author: "Tommy Lang"
+date: "7/3/2018"
+output:
+  html_notebook:
+    code_folding: hide
+    df_print: paged
+    fig_height: 4
+    fig_width: 7
+    highlight: tango
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+---
+
+# Packages, Data and Custom Functions
+
+Custom Functions:
+This code chunk contains custom fucntions that I use to help automate or make
+tasks easier.
+```{r message=FALSE}
+LoadPackages <- function(packages) {
+  # Load or install packages if they aren't already loaded.
+  #
+  # Args:
+  #   packages: a vector of package names
+  #
+  for (package in packages) {
+    if (!require(package, character.only=T, quietly=T)) {
+      if (!package %in% installed.packages()) install.packages(package)
+      library(package, character.only=T)
+    }
+  }
+}
+
+ColNa <- function(df) {
+  # Return a vector of column names that have NA values
+  #
+  # Args:
+  # df: data frame 
+  #
+  # Returns:
+  #  vector of column names that have NAs 
+  df <- tbl_df(df)
+  v <- c()
+  j <- 1
+  for(i in 1:ncol(df)) {
+    x <- df[ ,i]
+    xRmvNA <- x[!is.na(x),]
+    lenx <- nrow(x)
+    lenxRmvNA <- nrow(xRmvNA)
+    if(lenx != lenxRmvNA ) {
+      v[j] <- colnames(df[ ,i])
+      j <- j+1
+    }
+  }
+  return(v)
+}
+```
+
+Load Packages:
+Packages contain functions that others write that help with doing stuff
+```{r, results=FALSE}
+# I use my custom function LoadPackages to load or install packages
+LoadPackages(c("dplyr", "haven", "stringr", "tidyr", "ggplot2"))
+```
+
+
+Read in data
+```{r results = FALSE}
+data_path <- 'E:/Tommy/Original_Data/Data'
+# The list.files function gets the file names in a specified directory
+# file_names contains the file names of all the data sets
+file_names <- list.files(path = data_path, recursive = TRUE)
+
+# Initialize a vector to hold data frame names
+df_names <- c()
+i <- 1
+
+# This loop goes through the file names and reads it into R
+for(name in file_names) {
+  # create variable name for df
+  df_name <- str_replace_all(name, " |_with_ann2|.sas7bdat|/acs_16_5yr|_records", "")
+  # read in data
+  df <- read_sas(paste0(data_path, "/", name))
+  df <- df %>% mutate_all(funs(as.character(.)))
+  # attach df to variable name
+  assign(df_name, df) 
+  print(paste0("done with: ", df_name, " ", i,"/",length(file_names)))
+  i <- i+1
+  # add the current iteration of the data frame name to the df_names vector
+  df_names <- c(df_names, df_name)
+}
+```
+
+Response Variable
+```{r}
+totals <- rx_trx %>% select(starts_with("TQTY"))
+
+
+
+end <- which(names(rx_trx) == "TRx_09302015")
+beg <- which(names(rx_trx) == "TRx_08312017")
+
+rx_trx$total <- rowSums(rx_trx[ , beg:end])
+```
+
