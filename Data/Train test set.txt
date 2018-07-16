@@ -1,0 +1,43 @@
+Train test set
+```{r}
+set.seed(888)
+train_index <- createDataPartition(all_k$t_rx_p, p = .8, list = FALSE)
+train <- all_k[train_index,]
+test <- all_k[-train_index,]
+```
+
+```{r}
+test_p <- test %>% select(-Zip, -t_rx_p)
+test_p <- as.data.frame(test_p)
+
+set.seed(8)
+test_p_imp <- missForest(test_p, verbose = TRUE)
+```
+
+
+```{r}
+train_p <- train %>% select(-Zip, -t_rx_p)
+train_p <- as.data.frame(train_p)
+
+set.seed(8)
+train_p_imp <- missForest(train_p, verbose = TRUE)
+```
+
+Boruta
+```{r}
+train_p_impd <- train_p_imp$ximp
+
+train_p_impd <- train %>% select(t_rx_p) %>% bind_cols(train_p_impd)
+
+train_p_impd
+
+set.seed(888)
+boruta_train <- Boruta(t_rx ~., data = train_p_impd, doTrace = 2, maxRuns = 88)
+
+final_boruta <- TentativeRoughFix(boruta_train)
+
+boruta_df <- attStats(final_boruta) %>% 
+  tibble::rownames_to_column() %>% arrange(desc(meanImp))
+
+imp_p <- getSelectedAttributes(final_boruta, withTentative = T)
+```
