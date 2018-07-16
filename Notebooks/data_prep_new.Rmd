@@ -1,0 +1,859 @@
+---
+title: "Exploration"
+author: "Tommy Lang"
+date: "7/3/2018"
+output:
+  html_notebook:
+    code_folding: hide
+    df_print: paged
+    fig_height: 4
+    fig_width: 7
+    highlight: tango
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+---
+
+# Packages, Data and Custom Functions
+
+Custom Functions:
+This code chunk contains custom fucntions that I use to help automate or make
+tasks easier.
+```{r message=FALSE}
+LoadPackages <- function(packages) {
+  # Load or install packages if they aren't already loaded.
+  #
+  # Args:
+  #   packages: a vector of package names
+  #
+  for (package in packages) {
+    if (!require(package, character.only=T, quietly=T)) {
+      if (!package %in% installed.packages()) install.packages(package)
+      library(package, character.only=T)
+    }
+  }
+}
+
+ColNa <- function(df) {
+  # Return a vector of column names that have NA values
+  #
+  # Args:
+  # df: data frame 
+  #
+  # Returns:
+  #  vector of column names that have NAs 
+  df <- tbl_df(df)
+  v <- c()
+  j <- 1
+  for(i in 1:ncol(df)) {
+    x <- df[ ,i]
+    xRmvNA <- x[!is.na(x),]
+    lenx <- nrow(x)
+    lenxRmvNA <- nrow(xRmvNA)
+    if(lenx != lenxRmvNA ) {
+      v[j] <- colnames(df[ ,i])
+      j <- j+1
+    }
+  }
+  return(v)
+}
+
+ReplaceNonNum <- function(x) {
+  str_replace_all(x, "[^.0-9]+", "")
+}
+
+data <- 'C:/Users/tlang/Documents/GitHub/Summer_Practicum_19_blue_9/Data/'
+```
+
+Load Packages:
+Packages contain functions that others write that help with doing stuff
+```{r, results=FALSE}
+# I use my custom function LoadPackages to load or install packages
+LoadPackages(c("dplyr", "haven", "stringr", "tidyr", 
+               "ggplot2", "missForest", "caret",
+               "Boruta"))
+```
+
+
+Read in data
+```{r results = FALSE}
+data_path <- 'E:/Tommy/Original_Data/Data'
+# The list.files function gets the file names in a specified directory
+# file_names contains the file names of all the data sets
+file_names <- list.files(path = data_path, recursive = TRUE)
+
+# Initialize a vector to hold data frame names
+df_names <- c()
+i <- 1
+
+# This loop goes through the file names and reads it into R
+for(name in file_names) {
+  # create variable name for df
+  df_name <- str_replace_all(name, " |_with_ann2|.sas7bdat|/acs_16_5yr|_records", "")
+  # read in data
+  df <- read_sas(paste0(data_path, "/", name))
+  df <- df %>% mutate_all(funs(as.character(.)))
+  # attach df to variable name
+  assign(df_name, df) 
+  print(paste0("done with: ", df_name, " ", i,"/",length(file_names)))
+  i <- i+1
+  # add the current iteration of the data frame name to the df_names vector
+  df_names <- c(df_names, df_name)
+}
+```
+
+city, Zip, Specialty, Product_Group makes a unique id
+```{r}
+# rx_trx %>% dplyr::group_by(city, Zip, Specialty, Product_Group) %>%
+#   mutate(rn = row_number()) %>% 
+#   arrange(city, Zip, Specialty, Product_Group, rn) %>% 
+#   filter(rn > 1) %>%
+#   select(city, Zip, Specialty, Product_Group, PG_Name, rn)
+```
+
+```{r}
+race <- bind_rows(MA_b02001, NC_b02001, OR_b02001)
+age_sex <- bind_rows(MA_s0101, NC_s0101, OR_s0101)
+house_fam <- bind_rows(MA_s1101, NC_s1101, OR_s1101)
+martial <- bind_rows(MA_s1201, NC_s1201, OR_s1201)
+school_enroll <- bind_rows(MA_s1401, NC_s1401, OR_s1401)
+education_attainment <- bind_rows(MA_s1501, NC_s1501, OR_s1501)
+poverty <- bind_rows(MA_s1701, NC_s1701, OR_s1701)
+income <- bind_rows(MA_s1901, NC_s1901, OR_s1901)
+employment <- bind_rows(MA_s2301, NC_s2301, OR_s2301)
+```
+
+
+```{r}
+# Race Dataset _______________________________________________
+race_k <- race %>% select(1:9)
+
+# these are all totals
+names(race_k) <- c("Zip", 
+                   "tot_pop", 
+                   "white", 
+                   "black", 
+                   "native", 
+                   "asian", 
+                   "hawaiian", 
+                   "other", 
+                   "two_more")
+
+# Age/ Sex data set ___________________________________________
+
+# age_sex_k <- age_sex %>%
+#   select(Zip, HC01_EST_VC01, HC02_EST_VC01, HC03_EST_VC01,
+#          HC01_EST_VC35, HC02_EST_VC35, HC03_EST_VC35,
+#          HC01_EST_VC37,  HC01_EST_VC38,  HC01_EST_VC39)
+# 
+# names(age_sex_k) <- c("Zip",
+#                       "tot_pop",
+#                       "male_pop",
+#                       "female_pop",
+#                       "median_age",
+#                       "m_median_age",
+#                       "f_median_age",
+#                       "age_depen_ratio",
+#                       "old_depen_ratio",
+#                       "child_depen_ratio")
+
+# These are all percentages besides and median age                
+age_sex_k <- age_sex %>% 
+  select(-HC01_EST_VC01, -HC02_EST_VC01, -HC03_EST_VC01, 
+         -ends_with("VC42"), -ends_with("VC43"))
+  
+names(age_sex_k) <- paste0(names(age_sex_k), "_age_sex")
+names(age_sex_k)[1] <- "Zip"
+  
+
+# Household and families data set ________________________________
+
+house_fam_k <- house_fam %>% 
+  select("Zip", 2:7, 12:17,
+         HC01_EST_VC27,
+         HC01_EST_VC28,
+         HC01_EST_VC29,
+         HC01_EST_VC32,
+         HC01_EST_VC33)
+
+names(house_fam_k) <- c("Zip", 
+                        'tot_households', 
+                        'tot_households_married',
+                        'tot_households_male', 
+                        'tot_households_female',
+                        'tot_households_nfamily',
+                        'avg_household_size',
+                        'tot_fam',
+                        'tot_fam_married',
+                        'tot_fam_male',
+                        'tot_fam_female',
+                        'tot_fam_nfamily',
+                        'avg_fam_size',
+                        "unit1_p",
+                        "unit2_p",
+                        "other_type_unit_p",
+                        "tot_owner_units_p",
+                        "tot_renter_units_p")
+
+# Martial data set ____________________________________________________________
+# These are all percentages
+martial_k <- martial %>% 
+  select(Zip, starts_with("HC02"), starts_with("HC03"), starts_with("HC04"),
+         starts_with("HC05"), starts_with("HC06")) %>%
+  select(-ends_with("VC39"))
+
+names(martial_k) <- paste0(names(martial_k), "_martial")
+names(martial_k)[1] <- "Zip"
+
+# names(martial_k) <- c("Zip",
+#                       "tot_pop_over_15",
+#                       "now_married_per",
+#                       "widowed_per",
+#                       "divorced_per",
+#                       "separated_per",
+#                       "never_married_per")
+
+
+# school enrollment____________________________________________________________
+# all percentages
+school_enroll_k <- school_enroll %>% 
+  select(Zip, starts_with("HC02"), starts_with("HC04"),
+         starts_with("HC06"))
+
+names(school_enroll_k) <- paste0(names(school_enroll_k), "_enroll")
+names(school_enroll_k)[1] <- "Zip"
+
+# Education attainment____________________________________________________________
+# all percentages
+education_attainment_k <- education_attainment %>% 
+  select(Zip, starts_with("HC02"), starts_with("HC04"),
+         starts_with("HC06"))
+
+names(education_attainment_k) <- paste0(names(education_attainment_k), "_edu")
+names(education_attainment_k)[1] <- "Zip"
+
+# Proverty____________________________________________________________
+#all percentages
+poverty_k <- poverty %>% 
+  select(Zip, starts_with("HC03"))
+
+names(poverty_k) <- paste0(names(poverty_k), "_poverty")
+names(poverty_k)[1] <- "Zip"
+
+# Income___________________________________________________________________________
+# needs to be changed into percentages? or it looks like it already is
+# All perentages or mean median income
+income_k <- income %>%
+  select(-ends_with("VC18"), -ends_with("VC19"), -ends_with("VC20"), -ends_with("VC01"))
+
+names(income_k) <- paste0(names(income_k), "_income")
+names(income_k)[1] <- "Zip"
+
+# Employment___________________________________________________________________________
+# all percentages
+employment_k <- employment %>%
+  select(Zip, starts_with('HC02'), starts_with('HC03'),starts_with('HC04'))
+
+names(employment_k) <- paste0(names(employment_k), "_empl")
+names(employment_k)[1] <- "Zip"
+```
+
+Join the data sets
+```{r}
+joined_dem <- race_k %>% 
+  inner_join(age_sex_k, "Zip") %>%
+  inner_join(house_fam_k, "Zip") %>%
+  inner_join(martial_k,"Zip") %>%
+  inner_join(school_enroll_k, "Zip") %>%
+  inner_join(education_attainment_k, "Zip") %>%
+  inner_join(poverty_k, "Zip") %>%
+  inner_join(income_k, "Zip") %>%
+  inner_join(employment_k, "Zip")
+```
+
+Replace non numeric with empty string and cast to double
+```{r}
+dem_c <- joined_dem %>% 
+  mutate_at(2:ncol(joined_dem), funs(ReplaceNonNum(.))) 
+
+dem_c[dem_c == ""] <- NA
+
+dem_c <- dem_c %>% 
+  mutate_at(2:ncol(dem_c), funs(as.double(.))) 
+```
+
+Check missing values
+```{r}
+# col_names <- names(joined_dem)
+# 
+# missing_values <- c()
+# foo <- c()
+# 
+# for(name in col_names) {
+#   mis_zip <- dem_c %>% 
+#     filter(is.na(get(name))) %>% pull(Zip)
+#   
+#   org_missing <- joined_dem %>% filter(Zip %in% as.character(mis_zip))
+#   foo <- org_missing %>% pull(get(name))
+#   missing_values <- c(missing_values, foo)
+# }
+# 
+# table(missing_values)
+```
+
+```{r}
+dem_c <- dem_c %>% 
+  mutate(white_p = white / tot_pop,
+         black_p = black / tot_pop,
+         native_p = native / tot_pop,
+         asian_p = asian / tot_pop,
+         hawaiian_p = hawaiian / tot_pop,
+         other_p = other / tot_pop,
+         two_more_p = two_more / tot_pop,
+         tot_households_p = tot_households / tot_pop,
+         tot_households_married_p = tot_households_married / tot_pop,
+         tot_households_male_p = tot_households_male / tot_pop,
+         tot_households_female_p = tot_households_female / tot_pop,
+         tot_households_nfamily_p = tot_households_nfamily / tot_pop,
+         tot_fam_p = tot_fam / tot_pop,
+         tot_fam_married_p = tot_fam_married / tot_pop,
+         tot_fam_male_p = tot_fam_male / tot_pop,
+         tot_fam_female_p = tot_fam_female / tot_pop,
+         tot_fam_nfamily_p = tot_fam_nfamily / tot_pop
+         ) %>%
+  select(-white,
+         -black,
+         -native,
+         -asian,
+         -hawaiian,
+         -other, 
+         -two_more,
+         -tot_households,
+         -tot_households_married,
+         -tot_households_male,
+         -tot_households_female,
+         -tot_households_nfamily,
+         -tot_fam,
+         -tot_fam_married,
+         -tot_fam_male,
+         -tot_fam_female,
+         -tot_fam_nfamily)
+
+```
+
+Create state features
+```{r}
+MA <- MA_b02001 %>% select(Zip) %>% mutate(state = 'MA')
+NC <- NC_b02001 %>% select(Zip) %>% mutate(state = 'NC')
+OR <- OR_b02001 %>% select(Zip) %>% mutate(state = 'OR')
+state <- bind_rows(MA, NC, OR)
+
+dem_c <- dem_c %>% inner_join(state, 'Zip') %>%
+  mutate_at("state", funs(as.factor))
+
+saveRDS(dem_c, paste0(data,"dem_c.rds"))
+```
+
+
+Keep features that are less than 5% missing
+```{r}
+all_obs <- rx_trx %>% 
+  distinct(Zip) %>% 
+  inner_join(dem_c, "Zip")
+
+all_na_cols <- colSums(is.na(all_obs)) %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column() 
+
+d_na_cols <- all_na_cols %>% filter(. > .05*nrow(all_obs)) %>% pull(rowname)
+all_cols <- names(all_obs)
+keep_cols <- setdiff(all_cols, d_na_cols)
+
+features <- dem_c %>% select(keep_cols)
+```
+
+Split into train and test sets
+```{r}
+set.seed(888)
+train_p <- features %>% sample_frac(.8)
+test_p  <- anti_join(features, train_p, by = 'Zip')
+```
+
+Impute missing values for train set
+```{r}
+train_imp <- train_p %>% select(-Zip)
+train_imp <- as.data.frame(train_imp)
+
+set.seed(8)
+train_imp2 <- missForest(train_imp, verbose = TRUE)
+
+train_impd <- bind_cols(train_p %>% select(Zip), train_imp2$ximp)
+
+saveRDS(train_imp2, paste0(data,'train_impd.rds'))
+# train_impd <- readRDS(paste0(data,'train_impd.rds'))
+```
+
+
+Imput missing values for test set
+```{r}
+test_imp <- test_p %>% select(-Zip)
+test_imp <- as.data.frame(test_imp)
+
+set.seed(8)
+test_imp2 <- missForest(test_imp, verbose = TRUE)
+
+test_impd <- bind_cols(test_p %>% select(Zip), test_imp2$ximp)
+
+saveRDS(test_imp2, paste0(data,'test_impd.rds'))
+```
+
+Response Variables
+```{r}
+pop <- dem_c %>% 
+  select(Zip, tot_pop)
+city <- rx_trx %>% 
+  distinct(Zip, city, ST)
+
+end <- which(names(rx_trx) == "TRx_09302015")
+beg <- which(names(rx_trx) == "TRx_08312017")
+rx_trx <- rx_trx %>% mutate_at(beg:end, funs(as.double(.)))
+
+rx_trx$total <- rowSums(rx_trx[ ,beg:end] )
+
+tot_rx <- rx_trx %>% 
+  group_by(Zip) %>% 
+  summarise(t_rx = sum(total),
+            t_rx_end = sum(TRx_08312017)) %>%
+  ungroup()
+
+# Normalize totals
+#1245 in rx but only 1189 matches in dem data with 2 zero
+# drop obs where tot_pop is zero because can't mix zip codes
+rx_p <- tot_rx %>% 
+  left_join(pop, "Zip") %>%
+  mutate(tot_pop = ifelse(tot_pop == 0, NA, tot_pop)) %>%
+  filter(!is.na(tot_pop)) %>%
+  mutate(t_rx_p = round((t_rx / tot_pop) *1000,2),
+         t_rx_end_p = round((t_rx_end / tot_pop) * 1000,2)) %>%
+  select(-t_rx, -t_rx_end, -tot_pop)
+
+p_20 <- quantile(rx_p$t_rx_p , probs = 0.80) %>% unname()
+
+resp_v1 <- rx_p %>%
+  mutate(rx_p_high = ifelse(t_rx_p > p_20, "pos", "neg")) %>%
+  mutate_at('rx_p_high', funs(as.factor(.)))
+```
+
+# Regression
+
+```{r}
+train_v1 <- resp_v1 %>% 
+  select(Zip, t_rx_p) %>% 
+  inner_join(train_impd, "Zip")
+
+train_v1_zip <- train_v1 %>% 
+  select(Zip)
+
+train_v1 <- train_v1 %>%
+  select(-Zip)
+```
+
+```{r}
+test_v1 <- resp_v1 %>% 
+  select(Zip, t_rx_p) %>% 
+  inner_join(test_impd, "Zip")
+
+test_v1_zip <- test_v1 %>% 
+  select(Zip)
+
+test_v1 <- test_v1 %>%
+  select(-Zip)
+```
+
+
+Boruta
+```{r}
+set.seed(888)
+boruta_train <- Boruta(t_rx_p ~., data = train_v1, doTrace = 2, maxRuns = 88)
+
+final_boruta <- TentativeRoughFix(boruta_train)
+
+boruta_df <- attStats(final_boruta) %>% 
+  tibble::rownames_to_column() %>% arrange(desc(meanImp))
+
+imp_p <- getSelectedAttributes(final_boruta, withTentative = T)
+
+saveRDS(final_boruta, paste0(data,"final_boruta.rds"))
+write.csv(boruta_df, paste0(data, "boruta_df.csv"))
+```
+
+```{r}
+train_v1_imp <- train_v1[c('t_rx_p', imp_p)]
+
+ctrl_r <- trainControl(method = "repeatedcv", 
+                       number = 10, 
+                       repeats = 1,
+                       verboseIter = TRUE)
+
+set.seed(88)
+rf_v1 <- train(t_rx_p ~., data = train_v1_imp, method = "ranger")
+
+rf_v1
+
+
+```
+
+try rf with all predictors
+```{r}
+rf_all <- train(t_rx_p ~., data = train_v1, method = "ranger")
+
+rf_all
+```
+
+
+# Classification  
+
+```{r}
+train_v2 <- resp_v1 %>% 
+  select(Zip, rx_p_high) %>% 
+  inner_join(train_impd, "Zip")
+
+train_v2_zip <- train_v2 %>% 
+  select(Zip)
+
+train_v2 <- train_v2 %>%
+  select(-Zip)
+```
+
+```{r}
+test_v2 <- resp_v1 %>% 
+  select(Zip, rx_p_high) %>% 
+  inner_join(test_impd, "Zip")
+
+test_v2_zip <- test_v2 %>% 
+  select(Zip)
+
+test_v2 <- test_v2 %>%
+  select(-Zip)
+```
+
+
+Boruta
+```{r}
+set.seed(888)
+boruta_train_c <- Boruta(rx_p_high ~., data = train_v2, doTrace = 2, maxRuns = 88)
+
+final_boruta_c <- TentativeRoughFix(boruta_train_c)
+
+boruta_df_c <- attStats(final_boruta_c) %>% 
+  tibble::rownames_to_column() %>% arrange(desc(meanImp))
+
+imp_p_c <- getSelectedAttributes(final_boruta_c, withTentative = T)
+
+saveRDS(final_boruta_c, paste0(data,"final_boruta_c.rds"))
+write.csv(boruta_df_c, paste0(data, "boruta_df_c.csv"))
+```
+
+
+
+```{r}
+train_v2_imp <- train_v2[c('rx_p_high', 
+                           "tot_households_nfamily_p", 
+                           "avg_household_size",
+                           "unit2_p",
+                           "tot_renter_units_p",
+                           
+                           "HC03_EST_VC20_age_sex",
+                           "tot_households_p",
+                           "HC02_EST_VC21_martial",
+                           "tot_households_married_p",
+                           "HC02_EST_VC30_edu",
+                           "HC03_EST_VC33_poverty") ]
+
+ctrl_c <- trainControl(method = "repeatedcv", 
+                       number = 10, 
+                       repeats = 1,
+                       verboseIter = TRUE)
+set.seed(88)
+rf_c <- train(rx_p_high ~., data = train_v2_imp, method = "ranger")
+
+rf_c
+
+set.seed(88)
+glm_c <- train(rx_p_high ~., data = train_v2_imp, method = "glm")
+
+glm_c
+
+foo <-glm(rx_p_high ~., data = train_v2_imp, family = binomial)
+
+
+```
+
+test set performance
+```{r}
+confusionMatrix(predict(glm_c, test_v2), test_v2$rx_p_high)
+```
+
+
+```{r}
+str(foo)
+
+data.frame(foo$coefficients) %>% 
+  tibble::rownames_to_column() %>% 
+  spread(key = rowname, value = foo.coefficients)
+```
+
+Bootstrap confidence intervals
+```{r}
+set.seed(888)
+B <- 1000
+
+coefs_df <- data.frame(foo$coefficients) %>% 
+            tibble::rownames_to_column() %>% 
+            spread(key = rowname, value = foo.coefficients)
+
+for (i in 1:B) {
+  index <- sample(1:nrow(train_v2_imp), nrow(train_v2_imp), replace = TRUE)
+  resample <- train_v2_imp[index, ]
+  
+  mod <- glm(rx_p_high ~., data = resample, family = binomial)
+  coefs <- data.frame(mod$coefficients) %>% 
+           tibble::rownames_to_column() %>% 
+           spread(key = rowname, value = mod.coefficients)
+  
+         
+         coefs_df <- bind_rows(coefs_df, coefs)
+}
+
+summary(coefs_df)
+```
+
+
+
+
+
+
+
+The rest isn't organized well because I was just trying out different stuff
+
+
+
+
+
+
+```{r}
+train_p %>% select(1:20) %>% head(100)
+```
+
+```{r}
+age_sex_k %>% head()
+```
+
+```{r}
+write.csv(train_p %>% select(1, 6:20, 50:70, 300:310, 257:267), paste0(scratch, "train_p.csv"))
+write.csv(train_impd %>% select(1, 6:20, 50:70, 300:310, 257:267), paste0(scratch, "train_impd.csv"))
+
+```
+
+```{r}
+scratch <- "C:/Users/tlang/Documents/GitHub/Summer_Practicum_19_blue_9/scratch/"
+```
+
+```{r}
+education_attainment %>% select(HC02_EST_VC71, Zip) %>% filter(Zip == 28040
+
+
+)
+```
+
+```{r}
+all_na_rows <- all_obs %>% 
+  mutate(row_na = rowSums(is.na(all_obs)))  %>% 
+  filter(row_na > .18*ncol(all_obs)) 
+
+all_na_rows_zips <- all_na_rows %>% pull(Zip)
+
+
+all_na_rows %>% select(row_na)
+
+
+```
+
+```{r}
+foo_all <- bind_rows(train_v1, test_v1)
+
+foo_train <- foo_all %>% filter(!(Zip %in% all_na_rows_zips)) %>%
+  select(-Zip)
+
+
+head(foo_train)
+dim(foo_train)
+
+```
+
+```{r}
+vif_func<-function(in_frame,thresh=10,trace=T,...){
+
+  library(fmsb)
+  
+  if(any(!'data.frame' %in% class(in_frame))) in_frame<-data.frame(in_frame)
+  
+  #get initial vif value for all comparisons of variables
+  vif_init<-NULL
+  var_names <- names(in_frame)
+  for(val in var_names){
+      regressors <- var_names[-which(var_names == val)]
+      form <- paste(regressors, collapse = '+')
+      form_in <- formula(paste(val, '~', form))
+      vif_init<-rbind(vif_init, c(val, VIF(lm(form_in, data = in_frame, ...))))
+      }
+  vif_max<-max(as.numeric(vif_init[,2]), na.rm = TRUE)
+
+  if(vif_max < thresh){
+    if(trace==T){ #print output of each iteration
+        prmatrix(vif_init,collab=c('var','vif'),rowlab=rep('',nrow(vif_init)),quote=F)
+        cat('\n')
+        cat(paste('All variables have VIF < ', thresh,', max VIF ',
+                  round(vif_max,2), sep=''),'\n\n')
+        }
+    return(var_names)
+    }
+  else{
+
+    in_dat<-in_frame
+
+    #backwards selection of explanatory variables, stops when all VIF values are below 'thresh'
+    while(vif_max >= thresh){
+      
+      vif_vals<-NULL
+      var_names <- names(in_dat)
+        
+      for(val in var_names){
+        regressors <- var_names[-which(var_names == val)]
+        form <- paste(regressors, collapse = '+')
+        form_in <- formula(paste(val, '~', form))
+        vif_add<-VIF(lm(form_in, data = in_dat, ...))
+        vif_vals<-rbind(vif_vals,c(val,vif_add))
+        }
+      max_row<-which(vif_vals[,2] == max(as.numeric(vif_vals[,2]), na.rm = TRUE))[1]
+
+      vif_max<-as.numeric(vif_vals[max_row,2])
+
+      if(vif_max<thresh) break
+      
+      if(trace==T){ #print output of each iteration
+        prmatrix(vif_vals,collab=c('var','vif'),rowlab=rep('',nrow(vif_vals)),quote=F)
+        cat('\n')
+        cat('removed: ',vif_vals[max_row,1],vif_max,'\n\n')
+        flush.console()
+        }
+
+      in_dat<-in_dat[,!names(in_dat) %in% vif_vals[max_row,1]]
+
+      }
+
+    return(names(in_dat))
+    
+    }
+  
+  }
+```
+
+VIF stepwise selection
+```{r}
+foo_vif <- vif_func(foo_train %>% dplyr::select(-t_rx_p), thresh = 5, trace = T)
+saveRDS(foo_vif, paste0(scratch,"VIF_5_col5_row18_notest.rds"))
+vif_5_train <- foo_train[c("t_rx_p", foo_vif)]
+
+dim(vif_5_train)
+head(vif_5_train)
+```
+
+
+stepwise 
+```{r}
+lm <- lm(t_rx_p ~., data = vif_5_train)
+step <- stepAIC(lm, direction = "both")
+
+step_var <- step$coefficients %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column() %>%
+  filter(rowname != "(Intercept)") %>%
+  pull(rowname)
+
+step
+
+step_train <- vif_5_train[c("t_rx_p", step_var)]
+
+lm_step <- train(t_rx_p ~., data = step_train, method = "lm")
+
+rf_step <- train(t_rx_p ~., data = step_train, method = "ranger")
+
+saveRDS(step_train, paste0(data,"step_train.rds"))
+```
+
+
+
+```{r}
+set.seed(888)
+boruta_train_foo <- Boruta(rx_p_high ~., data = foo_train, doTrace = 2, maxRuns = 88)
+
+final_boruta_foo <- TentativeRoughFix(boruta_train_foo)
+
+boruta_df_foo <- attStats(final_boruta_foo) %>% 
+  tibble::rownames_to_column() %>% arrange(desc(meanImp))
+
+imp_p_foo <- getSelectedAttributes(final_boruta_foo, withTentative = T)
+```
+
+```{r}
+foo_train <- foo_train[c('rx_p_high', imp_p_foo)]
+
+rf_v1_foo <- train(rx_p_high ~., data = foo_train, method = "ranger")
+
+rf_v1_foo
+
+table(foo_train$rx_p_high) / nrow(foo_train)
+```
+
+```{r}
+boruta_df_type <-  boruta_df %>% mutate(enroll = str_detect(boruta_df$rowname, "enroll"),
+                     poverty = str_detect(boruta_df$rowname, "poverty"),
+                     income = str_detect(boruta_df$rowname, "income"),
+                     employement =  str_detect(boruta_df$rowname, "emply"), 
+                     age_sex =  str_detect(boruta_df$rowname, "age_sex"),
+                     martial =  str_detect(boruta_df$rowname, "martial"),
+                     education =  str_detect(boruta_df$rowname, "edu"))
+
+write.csv(boruta_df_type, paste0(scratch, "boruta_df_REGRESSION_w_type.csv"))
+```
+
+
+
+
+
+
+
+
+
+
+Scratch
+They are percentages
+```{r}
+names(dem_c)
+
+age_sex_k
+
+foo <- age_sex %>% select(5:56) %>% 
+  select(starts_with("HC01")) %>%
+  mutate_all(funs(as.double(.)))
+
+foo$total <- rowSums(foo)
+
+foo$total
+```
+
+
+
+
